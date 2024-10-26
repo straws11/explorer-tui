@@ -5,20 +5,15 @@ use crate::{
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use ratatui::{
-    buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::Stylize,
-    symbols::border,
     text::{Line, Text},
     widgets::{Block, Paragraph, Widget},
-    DefaultTerminal, Frame,
 };
 use std::io;
 use tui::Tui;
 
-#[derive(Debug, Default)]
+#[derive(Default, Debug)]
 pub struct App {
-    counter: i8,
     exit: bool,
 }
 
@@ -51,8 +46,8 @@ impl App {
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event.code {
             KeyCode::Char('q') => self.exit(),
-            KeyCode::Left => self.dec_counter(),
-            KeyCode::Right => self.inc_counter(),
+            // KeyCode::Left => self.dec_counter(),
+            // KeyCode::Right => self.inc_counter(),
             _ => {}
         }
     }
@@ -61,14 +56,6 @@ impl App {
 
     fn exit(&mut self) {
         self.exit = true;
-    }
-
-    fn inc_counter(&mut self) {
-        self.counter += 1;
-    }
-
-    fn dec_counter(&mut self) {
-        self.counter -= 1;
     }
 }
 
