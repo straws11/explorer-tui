@@ -1,11 +1,19 @@
 use crate::{
+    file_tree::Tree,
     tui::{self, CrosstermTerminal},
     ui,
 };
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{
+    backend::CrosstermBackend,
+    buffer::Buffer,
+    style::Style,
+    widgets::{ListState, StatefulWidget},
+    Terminal,
+};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
+    style::Color,
     text::{Line, Text},
     widgets::{Block, Paragraph, Widget},
 };
@@ -14,14 +22,16 @@ use tui::Tui;
 
 #[derive(Default, Debug)]
 pub struct App {
-    exit: bool,
+    pub exit: bool,
+    pub file_tree: Tree,
 }
 
 impl App {
-    /// runs app's main loop until user quits
+    /// runs app's setup and main loop until user quits
     pub fn run(&mut self, terminal: Terminal<CrosstermBackend<io::Stderr>>) -> io::Result<()> {
         let mut tui = Tui::new(terminal);
         tui.enter()?;
+        self.file_tree = Tree::new();
         // main loop
         while !self.exit {
             // receives ref to app for its state data
@@ -59,37 +69,19 @@ impl App {
     }
 }
 
-// render_widget from Frame is important, renders any type that impl's Widget trait
-// thus we impl it for a ref to App (ref because we don't mutate state)
-// impl Widget for &App {
-//     fn render(self, area: Rect, buf: &mut Buffer) {
-//         // let chunks = Layout::default().direction(Direction::Horizontal).constraints([Constraint::Length(10), Constraint::Min(1)]).split(area);
-//         // added alignment() below to illustrate you can add it anywhere
-//         // assuming if you want to use same line with diff alignment, you could call alignment
-//         // with something else every time you want to use it?
-//         let title = Line::from("Counter App Tutorial".bold()).alignment(Alignment::Center);
-//         let instr = Line::from(vec![
-//             " Decrement ".into(),
-//             "<Left>".blue().bold(),
-//             " Increment ".into(),
-//             "<Right>".blue().bold(),
-//             " Quit ".into(),
-//             "<Q> ".blue().bold(),
-//         ]);
-//         let block = Block::bordered()
-//             // .title(title.alignment(Alignment::Center))
-//             .title_top(title)
-//             // here alignment is set only at this point, unlike above example
-//             .title_bottom(instr.alignment(Alignment::Center))
-//             .border_set(border::THICK);
-//         let counter_text = Text::from(vec![Line::from(vec![
-//             "Value: ".into(),
-//             self.counter.to_string().light_red(),
-//         ])]);
-//
-//         Paragraph::new(counter_text)
-//             .centered()
-//             .block(block)
-//             .render(area, buf);
-//     }
-// }
+impl Widget for &mut App {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let chunks = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(area);
+
+        let block = Block::bordered();
+        let title = Paragraph::new(Text::styled(
+            "I'm trying",
+            Style::default().fg(Color::Green),
+        ))
+        .block(block);
+        self.file_tree.render(chunks[0], buf);
+        // frame.render_widget(title, chunks[0]);
+        // frame.render_widget(&app.file_tree, chunks[1]);
+    }
+}

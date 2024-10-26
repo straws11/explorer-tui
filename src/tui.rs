@@ -38,7 +38,8 @@ impl Tui {
     }
 
     pub fn draw(&mut self, app: &mut App) -> io::Result<()> {
-        self.terminal.draw(|frame| ui::render(app, frame))?;
+        self.terminal
+            .draw(|frame| frame.render_widget(app, frame.area()))?;
         Ok(())
     }
 
