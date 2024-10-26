@@ -1,5 +1,10 @@
 mod app;
+mod tui;
+mod ui;
+use ratatui::{backend::CrosstermBackend, Terminal};
+
 use crate::app::App;
+use crate::tui::Tui;
 use std::fs::{self, DirEntry};
 use std::io;
 use std::path::Path;
@@ -75,12 +80,8 @@ impl Tree {
     }
 }
 fn main() -> io::Result<()> {
-    let mut tree = Tree::default();
-    tree.get_files(1)?;
-    println!("{:#?}", tree);
-    let mut terminal = ratatui::init();
-    terminal.clear()?;
-    let app_result = App::default().run(&mut terminal);
-    ratatui::restore();
-    app_result
+    let mut app = App::default();
+    let backend = CrosstermBackend::new(std::io::stderr());
+    let terminal = Terminal::new(backend)?;
+    app.run(terminal)
 }
