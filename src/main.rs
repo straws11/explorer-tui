@@ -5,39 +5,79 @@ use std::io;
 use std::path::Path;
 
 #[derive(Default, Debug)]
+pub enum FileObjType {
+    #[default]
+    File,
+    Directory,
+}
+
+#[derive(Default, Debug)]
+pub struct FileObj {
+    pub sub_items: Vec<FileObj>,
+    pub object_type: FileObjType,
+    pub name: String,
+}
+
+impl FileObj {
+    pub fn new(obj_type: FileObjType, name: String) -> Self {
+        Self {
+            sub_items: Vec::new(),
+            object_type: obj_type,
+            name,
+        }
+    }
+}
+
+#[derive(Default, Debug)]
 pub struct Tree {
-    pub files: Vec<String>,
+    pub root_items: Vec<FileObj>,
 }
 
 impl Tree {
-    pub fn get_files(&mut self) -> io::Result<()> {
+    pub fn get_files(&mut self, depth: u8) -> io::Result<()> {
         let path = Path::new("../../explorer_rust");
-        Tree::visit_dir(path, 2)?;
+        Tree::visit_dir(path, depth, &mut self.root_items)?;
         Ok(())
     }
-    fn visit_dir(dir: &Path, depth: u8) -> io::Result<()> {
-        // depth reached
-        if depth == 0 {
+
+    /// Recursively generate the file tree
+    fn visit_dir(dir: &Path, depth: u8, list: &mut Vec<FileObj>) -> io::Result<()> {
+        // depth reached, base case
+        if depth == 0 || !dir.is_dir() {
             return Ok(());
         }
-        if dir.is_dir() {
-            for entry in fs::read_dir(dir)? {
-                let entry = entry?;
-                let path = entry.path();
-                if path.is_dir() {
-                    Self::visit_dir(&path, depth - 1)?;
-                } else {
-                    println!("{:?}", &entry);
+
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            let item_name = entry.file_name().into_string();
+            let item_name = match item_name {
+                Ok(name) => name,
+                Err(e) => {
+                    println!("Error converting filename: {:?}", e);
+                    // lol this can't be right vv
+                    return Ok(());
                 }
+            };
+
+            let mut file_obj;
+            if !path.is_dir() {
+                file_obj = FileObj::new(FileObjType::File, item_name);
+            } else {
+                file_obj = FileObj::new(FileObjType::Directory, item_name);
+                Self::visit_dir(&path, depth - 1, &mut file_obj.sub_items)?;
             }
+
+            list.push(file_obj);
         }
         Ok(())
     }
 }
 fn main() -> io::Result<()> {
     let mut tree = Tree::default();
-    tree.get_files()?;
-    println!("{:?}", tree);
+    tree.get_files(1)?;
+    println!("{:#?}", tree);
     let mut terminal = ratatui::init();
     terminal.clear()?;
     let app_result = App::default().run(&mut terminal);

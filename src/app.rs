@@ -90,7 +90,7 @@ impl Widget for &App {
             .border_set(border::THICK);
         let counter_text = Text::from(vec![Line::from(vec![
             "Value: ".into(),
-            self.counter.to_string().yellow(),
+            self.counter.to_string().light_red(),
         ])]);
 
         Paragraph::new(counter_text)
