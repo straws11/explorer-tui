@@ -1,20 +1,13 @@
-use crate::{
-    file_tree::Tree,
-    tui::{self, CrosstermTerminal},
-};
+use crate::{file_tree::Tree, tui};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     backend::CrosstermBackend,
     buffer::Buffer,
-    style::Style,
-    widgets::{ListState, StatefulWidget},
-    Terminal,
-};
-use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::Color,
-    text::{Line, Text},
+    layout::{Constraint, Layout, Rect},
+    style::{Color, Style},
+    text::Text,
     widgets::{Block, Paragraph, Widget},
+    Terminal,
 };
 use std::io;
 use tui::Tui;
@@ -57,8 +50,11 @@ impl App {
             KeyCode::Char('q') => self.exit(),
             // KeyCode::Left => self.dec_counter(),
             // KeyCode::Right => self.inc_counter(),
-            KeyCode::Char('j') => self.file_tree.ft_state.select_next(),
-            KeyCode::Char('k') => self.file_tree.ft_state.select_previous(),
+            // TODO: only call the methods after ensuring you CAN move sub or parent
+            KeyCode::Char('j') => self.file_tree.move_down(),
+            KeyCode::Char('k') => self.file_tree.move_up(),
+            KeyCode::Char('h') => self.file_tree.move_parent_dir(),
+            KeyCode::Char('l') => self.file_tree.move_sub_dir(),
             _ => {}
         }
     }
@@ -82,7 +78,7 @@ impl Widget for &mut App {
         ))
         .block(block);
         self.file_tree.render(chunks[0], buf);
-        // frame.render_widget(title, chunks[0]);
+        title.render(chunks[1], buf);
         // frame.render_widget(&app.file_tree, chunks[1]);
     }
 }

@@ -10,19 +10,26 @@ use ratatui::style::{Color, Style};
 use ratatui::widgets::ListItem;
 use ratatui::widgets::{Block, List, ListState, StatefulWidget, Widget};
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub enum FileObjType {
     #[default]
     File,
     Directory,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct FileObj {
     pub sub_items: Vec<FileObj>,
     pub sub_items_size: usize,
     pub object_type: FileObjType,
     pub name: String,
+}
+
+#[derive(Default, Debug)]
+pub struct TreeState {
+    pub list_state: ListState,
+    pub parent_index: Vec<usize>,
+    pub cur_contents: Vec<FileObj>,
 }
 
 impl FileObj {
@@ -40,7 +47,7 @@ impl FileObj {
 pub struct Tree {
     pub root: FileObj,
     // pub root_items: Vec<FileObj>,
-    pub ft_state: ListState,
+    pub state: TreeState,
     // pub root_path: Path,
 }
 
@@ -50,8 +57,14 @@ impl Tree {
         let mut tree = Self {
             root: FileObj::new(FileObjType::Directory, "root, todo".to_string()),
             // root_path: Path::new("../../explorer_rust"),
-            ft_state: ListState::default(),
+            state: TreeState::default(),
         };
+
+        // keep the list of objects for the component use
+        tree.state
+            .cur_contents
+            .clone_from_slice(&tree.root.sub_items);
+
         let root_path = Path::new("../../explorer_rust");
         tree.get_files(root_path, 2);
         tree
@@ -60,6 +73,27 @@ impl Tree {
     pub fn get_files(&mut self, path: &Path, depth: u8) -> io::Result<()> {
         visit_dir(path, depth, &mut self.root)?;
         Ok(())
+    }
+
+    pub fn move_down(&mut self) {
+        // self.state.list_state.select(num)
+    }
+
+    pub fn move_up(&mut self) {}
+
+    /// Move into a subdir, pushing the parent idx onto stack
+    pub fn move_sub_dir(&mut self) {
+        let parent_idx = self.state.list_state.selected().unwrap();
+        self.state.parent_index.push(parent_idx);
+        self.state.list_state.select_next();
+    }
+
+    /// Move up to the parent dir's index, popped from a stack
+    pub fn move_parent_dir(&mut self) {
+        let parent_idx = self.state.parent_index.pop();
+        if parent_idx.is_some() {
+            self.state.list_state.select(parent_idx);
+        }
     }
 }
 
@@ -102,8 +136,11 @@ pub fn build_list(obj: &FileObj, depth: u8, list: &mut Vec<ListItem>) {
     for item in &obj.sub_items {
         // add item to list
         let rep = " ".repeat((depth * 3).into());
-        let li = ListItem::new(format!("{}{}", rep, item.name.clone()))
-            .style(Style::default().fg(Color::White));
+        let name = match item.object_type {
+            FileObjType::File => format!("{}{}", rep, item.name.clone()),
+            FileObjType::Directory => format!("{}{}/", rep, item.name.clone()),
+        };
+        let li = ListItem::new(name).style(Style::default().fg(Color::White));
         list.push(li);
 
         // recursive call for dirs
@@ -134,6 +171,6 @@ impl Widget for &mut Tree {
                     .fg(Color::Yellow),
             )
             .highlight_symbol("▶");
-        StatefulWidget::render(list, area, buf, &mut self.ft_state);
+        StatefulWidget::render(list, area, buf, &mut self.state.list_state);
     }
 }
