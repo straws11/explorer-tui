@@ -5,7 +5,11 @@ use std::path::Path;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use ratatui::style::Modifier;
+use ratatui::style::{Color, Style};
+use ratatui::widgets::ListItem;
 use ratatui::widgets::{Block, List, ListState, StatefulWidget, Widget};
+
 #[derive(Default, Debug)]
 pub enum FileObjType {
     #[default]
@@ -16,6 +20,7 @@ pub enum FileObjType {
 #[derive(Default, Debug)]
 pub struct FileObj {
     pub sub_items: Vec<FileObj>,
+    pub sub_items_size: usize,
     pub object_type: FileObjType,
     pub name: String,
 }
@@ -24,6 +29,7 @@ impl FileObj {
     pub fn new(obj_type: FileObjType, name: String) -> Self {
         Self {
             sub_items: Vec::new(),
+            sub_items_size: 0,
             object_type: obj_type,
             name,
         }
@@ -32,28 +38,33 @@ impl FileObj {
 
 #[derive(Default, Debug)]
 pub struct Tree {
-    pub root_items: Vec<FileObj>,
+    pub root: FileObj,
+    // pub root_items: Vec<FileObj>,
     pub ft_state: ListState,
+    // pub root_path: Path,
 }
 
 impl Tree {
     pub fn new() -> Self {
+        // TODO: smarter way to get the starting path, env something
         let mut tree = Self {
-            root_items: Vec::new(),
+            root: FileObj::new(FileObjType::Directory, "root, todo".to_string()),
+            // root_path: Path::new("../../explorer_rust"),
             ft_state: ListState::default(),
         };
-        let _ = tree.get_files(3);
+        let root_path = Path::new("../../explorer_rust");
+        tree.get_files(root_path, 2);
         tree
     }
-    pub fn get_files(&mut self, depth: u8) -> io::Result<()> {
-        let path = Path::new("../../explorer_rust");
-        visit_dir(path, depth, &mut self.root_items)?;
+
+    pub fn get_files(&mut self, path: &Path, depth: u8) -> io::Result<()> {
+        visit_dir(path, depth, &mut self.root)?;
         Ok(())
     }
 }
 
 /// Helper method to recursively generate the file tree
-fn visit_dir(dir: &Path, depth: u8, list: &mut Vec<FileObj>) -> io::Result<()> {
+fn visit_dir(dir: &Path, depth: u8, node: &mut FileObj) -> io::Result<()> {
     // depth reached, base case
     if depth == 0 || !dir.is_dir() {
         return Ok(());
@@ -76,13 +87,31 @@ fn visit_dir(dir: &Path, depth: u8, list: &mut Vec<FileObj>) -> io::Result<()> {
             FileObj::new(FileObjType::File, item_name)
         } else {
             let mut dir_obj = FileObj::new(FileObjType::Directory, item_name);
-            visit_dir(&path, depth - 1, &mut dir_obj.sub_items)?;
+            visit_dir(&path, depth - 1, &mut dir_obj)?;
             dir_obj
         };
 
-        list.push(file_obj);
+        node.sub_items.push(file_obj);
     }
+    node.sub_items_size = node.sub_items.len();
     Ok(())
+}
+
+/// Helper method to generate the List (of ListItems) for Tree
+pub fn build_list(obj: &FileObj, depth: u8, list: &mut Vec<ListItem>) {
+    for item in &obj.sub_items {
+        // add item to list
+        let rep = " ".repeat((depth * 3).into());
+        let li = ListItem::new(format!("{}{}", rep, item.name.clone()))
+            .style(Style::default().fg(Color::White));
+        list.push(li);
+
+        // recursive call for dirs
+        match item.object_type {
+            FileObjType::Directory => build_list(item, depth + 1, list),
+            FileObjType::File => {}
+        }
+    }
 }
 
 impl fmt::Display for FileObj {
@@ -93,8 +122,18 @@ impl fmt::Display for FileObj {
 
 impl Widget for &mut Tree {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let items = self.root_items.iter().map(|obj| obj.name.clone());
-        let list = List::new(items).block(Block::bordered().title("FT"));
+        // building the List component data
+        let mut list_items: Vec<ListItem> = Vec::new();
+        build_list(&self.root, 0, &mut list_items);
+
+        let list = List::new(list_items)
+            .block(Block::bordered().title("FT"))
+            .highlight_style(
+                Style::default()
+                    .add_modifier(Modifier::BOLD)
+                    .fg(Color::Yellow),
+            )
+            .highlight_symbol("▶");
         StatefulWidget::render(list, area, buf, &mut self.ft_state);
     }
 }

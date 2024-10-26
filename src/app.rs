@@ -1,7 +1,6 @@
 use crate::{
     file_tree::Tree,
     tui::{self, CrosstermTerminal},
-    ui,
 };
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
@@ -58,6 +57,8 @@ impl App {
             KeyCode::Char('q') => self.exit(),
             // KeyCode::Left => self.dec_counter(),
             // KeyCode::Right => self.inc_counter(),
+            KeyCode::Char('j') => self.file_tree.ft_state.select_next(),
+            KeyCode::Char('k') => self.file_tree.ft_state.select_previous(),
             _ => {}
         }
     }
