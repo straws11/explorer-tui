@@ -1,32 +1,83 @@
 use ratatui::widgets::ListState;
+use std::cmp::Ordering;
+
+use crate::tree::{FileObj, FileObjType};
 
 #[derive(Default, Debug)]
 pub struct FileTreeState {
     /// Internally managed underlying Ratatui List state
     pub list_state: ListState,
     /// Depth into sub dir
-    pub depth: usize,
+    pub parent_indices: Vec<usize>,
 }
 
 impl FileTreeState {
-    pub fn move_down(&mut self) {
-        // self.state.list_state.select(num)
+    pub fn default() -> Self {
+        let mut fts = Self {
+            list_state: ListState::default(),
+            parent_indices: Vec::new(),
+        };
+        fts.list_state.select_first();
+        fts
     }
 
-    pub fn move_up(&mut self) {}
+    pub fn move_down(&mut self, list: &Vec<FileObj>) {
+        let idx = self.list_state.selected().unwrap();
 
-    /// Move into a subdir, pushing the parent idx onto stack
-    pub fn move_sub_dir(&mut self) {
-        let parent_idx = self.state.list_state.selected().unwrap();
-        self.state.parent_index.push(parent_idx);
-        self.state.list_state.select_next();
+        let mut count = idx + 1;
+        while count < list.len() {
+            match list[idx].depth.cmp(&list[count].depth) {
+                Ordering::Equal => {
+                    // next file is in the same dir
+                    self.list_state.select(Some(count));
+                    break;
+                }
+                // bottom of this sub list
+                Ordering::Greater => break,
+
+                // skipping over a subdir's entries
+                Ordering::Less => count += 1,
+            }
+        }
     }
 
-    /// Move up to the parent dir's index, popped from a stack
-    pub fn move_parent_dir(&mut self) {
-        let parent_idx = self.state.parent_index.pop();
-        if parent_idx.is_some() {
-            self.state.list_state.select(parent_idx);
+    pub fn move_up(&mut self, list: &Vec<FileObj>) {
+        let idx = self.list_state.selected().unwrap();
+        if idx == 0 {
+            return;
+        }
+        let mut count = idx;
+        while count > 0 {
+            count -= 1;
+            match list[idx].depth.cmp(&list[count].depth) {
+                Ordering::Equal => {
+                    self.list_state.select(Some(count));
+                    return;
+                }
+                // top of this subdir
+                // NOTE: make this select the parent? (by popping)
+                Ordering::Greater => break,
+                Ordering::Less => {}
+            }
+        }
+    }
+
+    pub fn move_sub_dir(&mut self, list: &Vec<FileObj>) {
+        let idx = self.list_state.selected().unwrap();
+        // file or empty dir => skip
+        if list[idx].object_type == FileObjType::File || list[idx].sub_items_size == 0 {
+            return;
+        }
+        self.list_state.select_next();
+        self.parent_indices.push(idx);
+    }
+
+    pub fn move_parent_dir(&mut self, list: &Vec<FileObj>) {
+        let idx = self.list_state.selected().unwrap();
+        let parent_idx = self.parent_indices.pop();
+
+        if let Some(idx) = parent_idx {
+            self.list_state.select(Some(idx));
         }
     }
 }

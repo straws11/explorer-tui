@@ -1,4 +1,8 @@
-use crate::{file_tree_widget::FileTreeWidget, tree::FileTree, tui};
+use crate::{
+    file_tree_widget::FileTreeWidget,
+    tree::{FileTree, NavDirection},
+    tui,
+};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::prelude::StatefulWidget;
 use ratatui::{
@@ -49,13 +53,10 @@ impl App {
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event.code {
             KeyCode::Char('q') => self.exit(),
-            // KeyCode::Left => self.dec_counter(),
-            // KeyCode::Right => self.inc_counter(),
-            // TODO: only call the methods after ensuring you CAN move sub or parent
-            KeyCode::Char('j') => self.tree.move_down(),
-            KeyCode::Char('k') => self.tree.move_up(),
-            KeyCode::Char('h') => self.tree.move_parent_dir(),
-            KeyCode::Char('l') => self.tree.move_sub_dir(),
+            KeyCode::Char('j') => self.tree.ft_move(NavDirection::Down),
+            KeyCode::Char('k') => self.tree.ft_move(NavDirection::Up),
+            KeyCode::Char('h') => self.tree.ft_move(NavDirection::OutOfDir),
+            KeyCode::Char('l') => self.tree.ft_move(NavDirection::IntoDir),
             _ => {}
         }
     }
@@ -74,8 +75,8 @@ impl Widget for &mut App {
             .split(area);
 
         // creating my custom widget and call its render method
-        let filetree_widget =
-            FileTreeWidget::new(self.tree).style(Style::default().fg(Color::Green));
+        let filetree_widget = FileTreeWidget::new(self.tree.linear_list.clone())
+            .style(Style::default().fg(Color::Green));
         filetree_widget.render(chunks[0], buf, &mut self.tree.state);
 
         // placeholder stuff
