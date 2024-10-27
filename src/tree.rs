@@ -25,15 +25,17 @@ pub struct FileObj {
     pub sub_items_size: usize,
     pub object_type: FileObjType,
     pub name: String,
+    pub depth: usize,
 }
 
 impl FileObj {
-    pub fn new(obj_type: FileObjType, name: String) -> Self {
+    pub fn new(obj_type: FileObjType, name: String, depth: usize) -> Self {
         Self {
             sub_items: Vec::new(),
             sub_items_size: 0,
             object_type: obj_type,
             name,
+            depth,
         }
     }
 }
@@ -49,7 +51,7 @@ impl FileTree {
     pub fn new() -> Self {
         // TODO: smarter way to get the starting path, env something
         let mut tree = Self {
-            root: FileObj::new(FileObjType::Directory, "root, todo".to_string()),
+            root: FileObj::new(FileObjType::Directory, "root, todo".to_string(), 0),
             // root_path: Path::new("../../explorer_rust"),
             state: FileTreeState::default(),
         };
@@ -60,16 +62,16 @@ impl FileTree {
         tree
     }
 
-    pub fn get_files(&mut self, path: &Path, depth: u8) -> io::Result<()> {
-        visit_dir(path, depth, &mut self.root)?;
+    pub fn get_files(&mut self, path: &Path, max_depth: usize) -> io::Result<()> {
+        visit_dir(path, 0, max_depth, &mut self.root)?;
         Ok(())
     }
 }
 
 /// Helper method to recursively generate the file tree
-fn visit_dir(dir: &Path, depth: u8, node: &mut FileObj) -> io::Result<()> {
+fn visit_dir(dir: &Path, depth: usize, max_depth: usize, node: &mut FileObj) -> io::Result<()> {
     // depth reached, base case
-    if depth == 0 || !dir.is_dir() {
+    if depth == max_depth || !dir.is_dir() {
         return Ok(());
     }
 
@@ -87,10 +89,10 @@ fn visit_dir(dir: &Path, depth: u8, node: &mut FileObj) -> io::Result<()> {
         };
 
         let file_obj = if !path.is_dir() {
-            FileObj::new(FileObjType::File, item_name)
+            FileObj::new(FileObjType::File, item_name, depth)
         } else {
-            let mut dir_obj = FileObj::new(FileObjType::Directory, item_name);
-            visit_dir(&path, depth - 1, &mut dir_obj)?;
+            let mut dir_obj = FileObj::new(FileObjType::Directory, item_name, depth);
+            visit_dir(&path, depth + 1, max_depth, &mut dir_obj)?;
             dir_obj
         };
 
@@ -131,15 +133,5 @@ impl Widget for &mut FileTree {
         // building the List component data
         let mut list_items: Vec<ListItem> = Vec::new();
         build_list(&self.root, 0, &mut list_items);
-
-        let list = List::new(list_items)
-            .block(Block::bordered().title("FT"))
-            .highlight_style(
-                Style::default()
-                    .add_modifier(Modifier::BOLD)
-                    .fg(Color::Yellow),
-            )
-            .highlight_symbol("▶");
-        StatefulWidget::render(list, area, buf, &mut self.state.list_state);
     }
 }

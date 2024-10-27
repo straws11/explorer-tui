@@ -3,9 +3,9 @@ use ratatui::widgets::ListState;
 #[derive(Default, Debug)]
 pub struct FileTreeState {
     /// Internally managed underlying Ratatui List state
-    list_state: ListState,
+    pub list_state: ListState,
     /// Depth into sub dir
-    depth: usize,
+    pub depth: usize,
 }
 
 impl FileTreeState {
