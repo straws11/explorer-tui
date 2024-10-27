@@ -1,5 +1,6 @@
-use crate::{file_tree::Tree, tui};
+use crate::{file_tree_widget::FileTreeWidget, tree::FileTree, tui};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use ratatui::prelude::StatefulWidget;
 use ratatui::{
     backend::CrosstermBackend,
     buffer::Buffer,
@@ -15,7 +16,7 @@ use tui::Tui;
 #[derive(Default, Debug)]
 pub struct App {
     pub exit: bool,
-    pub file_tree: Tree,
+    pub tree: FileTree,
 }
 
 impl App {
@@ -23,7 +24,7 @@ impl App {
     pub fn run(&mut self, terminal: Terminal<CrosstermBackend<io::Stderr>>) -> io::Result<()> {
         let mut tui = Tui::new(terminal);
         tui.enter()?;
-        self.file_tree = Tree::new();
+        self.tree = FileTree::new();
         // main loop
         while !self.exit {
             // receives ref to app for its state data
@@ -51,10 +52,10 @@ impl App {
             // KeyCode::Left => self.dec_counter(),
             // KeyCode::Right => self.inc_counter(),
             // TODO: only call the methods after ensuring you CAN move sub or parent
-            KeyCode::Char('j') => self.file_tree.move_down(),
-            KeyCode::Char('k') => self.file_tree.move_up(),
-            KeyCode::Char('h') => self.file_tree.move_parent_dir(),
-            KeyCode::Char('l') => self.file_tree.move_sub_dir(),
+            KeyCode::Char('j') => self.tree.move_down(),
+            KeyCode::Char('k') => self.tree.move_up(),
+            KeyCode::Char('h') => self.tree.move_parent_dir(),
+            KeyCode::Char('l') => self.tree.move_sub_dir(),
             _ => {}
         }
     }
@@ -68,17 +69,22 @@ impl App {
 
 impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
+        // splitting the app layout into different segments
         let chunks = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(area);
 
+        // creating my custom widget and call its render method
+        let filetree_widget =
+            FileTreeWidget::new(self.tree).style(Style::default().fg(Color::Green));
+        filetree_widget.render(chunks[0], buf, &mut self.tree.state);
+
+        // placeholder stuff
         let block = Block::bordered();
         let title = Paragraph::new(Text::styled(
             "I'm trying",
             Style::default().fg(Color::Green),
         ))
         .block(block);
-        self.file_tree.render(chunks[0], buf);
         title.render(chunks[1], buf);
-        // frame.render_widget(&app.file_tree, chunks[1]);
     }
 }

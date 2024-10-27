@@ -1,5 +1,7 @@
 mod app;
-mod file_tree;
+mod file_tree_state;
+mod file_tree_widget;
+mod tree;
 mod tui;
 use ratatui::{backend::CrosstermBackend, Terminal};
 

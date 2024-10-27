@@ -10,6 +10,8 @@ use ratatui::style::{Color, Style};
 use ratatui::widgets::ListItem;
 use ratatui::widgets::{Block, List, ListState, StatefulWidget, Widget};
 
+use crate::file_tree_widget::FileTreeState;
+
 #[derive(Default, Debug, Clone)]
 pub enum FileObjType {
     #[default]
@@ -25,13 +27,6 @@ pub struct FileObj {
     pub name: String,
 }
 
-#[derive(Default, Debug)]
-pub struct TreeState {
-    pub list_state: ListState,
-    pub parent_index: Vec<usize>,
-    pub cur_contents: Vec<FileObj>,
-}
-
 impl FileObj {
     pub fn new(obj_type: FileObjType, name: String) -> Self {
         Self {
@@ -43,28 +38,23 @@ impl FileObj {
     }
 }
 
+/// Struct resembling a directory structure, with user state
 #[derive(Default, Debug)]
-pub struct Tree {
+pub struct FileTree {
     pub root: FileObj,
-    // pub root_items: Vec<FileObj>,
-    pub state: TreeState,
-    // pub root_path: Path,
+    pub state: FileTreeState,
 }
 
-impl Tree {
+impl FileTree {
     pub fn new() -> Self {
         // TODO: smarter way to get the starting path, env something
         let mut tree = Self {
             root: FileObj::new(FileObjType::Directory, "root, todo".to_string()),
             // root_path: Path::new("../../explorer_rust"),
-            state: TreeState::default(),
+            state: FileTreeState::default(),
         };
 
         // keep the list of objects for the component use
-        tree.state
-            .cur_contents
-            .clone_from_slice(&tree.root.sub_items);
-
         let root_path = Path::new("../../explorer_rust");
         tree.get_files(root_path, 2);
         tree
@@ -73,27 +63,6 @@ impl Tree {
     pub fn get_files(&mut self, path: &Path, depth: u8) -> io::Result<()> {
         visit_dir(path, depth, &mut self.root)?;
         Ok(())
-    }
-
-    pub fn move_down(&mut self) {
-        // self.state.list_state.select(num)
-    }
-
-    pub fn move_up(&mut self) {}
-
-    /// Move into a subdir, pushing the parent idx onto stack
-    pub fn move_sub_dir(&mut self) {
-        let parent_idx = self.state.list_state.selected().unwrap();
-        self.state.parent_index.push(parent_idx);
-        self.state.list_state.select_next();
-    }
-
-    /// Move up to the parent dir's index, popped from a stack
-    pub fn move_parent_dir(&mut self) {
-        let parent_idx = self.state.parent_index.pop();
-        if parent_idx.is_some() {
-            self.state.list_state.select(parent_idx);
-        }
     }
 }
 
@@ -157,7 +126,7 @@ impl fmt::Display for FileObj {
     }
 }
 
-impl Widget for &mut Tree {
+impl Widget for &mut FileTree {
     fn render(self, area: Rect, buf: &mut Buffer) {
         // building the List component data
         let mut list_items: Vec<ListItem> = Vec::new();
