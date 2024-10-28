@@ -1,8 +1,8 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::{Color, Style, Stylize},
-    widgets::{List, ListItem, StatefulWidget},
+    style::{Color, Style, Styled, Stylize},
+    widgets::{Block, List, ListItem, StatefulWidget},
 };
 
 use crate::{
@@ -10,23 +10,25 @@ use crate::{
     tree::{FileObj, FileObjType},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FileTreeWidget<'a> {
     /// filetree object with sublists
     file_list: Vec<FileObj>,
     /// Ratatui list component for rendering the output list
-    list: List<'a>,
+    // list: List<'a>,
     style: Style,
     highlight_style: Style,
+    block: Block<'a>,
 }
 
-impl FileTreeWidget<'_> {
+impl<'a> FileTreeWidget<'a> {
     pub fn new(obj_list: Vec<FileObj>) -> Self {
         Self {
             file_list: obj_list,
-            list: List::default(),
+            // list: List::default(),
             style: Style::default(),
             highlight_style: Style::default(),
+            block: Block::default(),
         }
     }
 
@@ -42,13 +44,29 @@ impl FileTreeWidget<'_> {
         self
     }
 
+    /// Mimic ratatui component styling with block
+    pub fn block(mut self, block: Block<'a>) -> Self {
+        self.block = block;
+        self
+    }
+
     /// Helper method to generate the List (of ListItems) for Tree
-    fn generate_list_items(&self) -> Vec<ListItem> {
+    fn generate_list_items(&self, selected_idx: Option<usize>) -> Vec<ListItem> {
         let mut item_list: Vec<ListItem> = Vec::new();
 
         // map each FileObj to a ListItem
-        for item in &self.file_list {
-            let disp_str = " ".repeat(item.depth * 3);
+        for (pos, item) in self.file_list.iter().enumerate() {
+            // TODO: fix the way the disp_str is calculated
+            let disp_str = match selected_idx {
+                Some(idx) => {
+                    if idx == pos {
+                        format!("{}> ", " ".repeat(item.depth * 3))
+                    } else {
+                        format!("{}  ", " ".repeat(item.depth * 3))
+                    }
+                }
+                None => format!("{}  ", " ".repeat(item.depth * 3)),
+            };
             let disp_str = match item.object_type {
                 FileObjType::File => format!("{}{}", disp_str, item.name.clone()),
                 FileObjType::Directory => format!("{}{}/", disp_str, item.name.clone()),
@@ -59,36 +77,20 @@ impl FileTreeWidget<'_> {
     }
 }
 
-/// Create a flat list (1D vec) of FileObj
-// fn build_list(obj: &FileObj, depth: u8, list: &mut Vec<FileObj>) {
-//     for item in &obj.sub_items {
-//         // add item to list
-//         // let rep = " ".repeat((depth * 3).into());
-//         // let name = match item.object_type {
-//         //     FileObjType::File => format!("{}{}", rep, item.name.clone()),
-//         //     FileObjType::Directory => format!("{}{}/", rep, item.name.clone()),
-//         // };
-//         // let li = ListItem::new(name).style(Style::default().fg(Color::White));
-//         // list.push(name);
-//         // recursive call for dirs
-//         list.push(item.clone());
-//         match item.object_type {
-//             FileObjType::Directory => build_list(item, depth + 1, list),
-//             FileObjType::File => {}
-//         }
-//     }
-// }
 // TODO: is this & or &mut or as is??
 impl StatefulWidget for FileTreeWidget<'_> {
     type State = FileTreeState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         // generate ListItems
-        let list_items_formatted = self.generate_list_items();
+        // TODO: fix this clone nonsense, i think generate_list_items needs changing
+        let clon = self.clone();
+        let list_items_formatted = clon.generate_list_items(state.list_state.selected());
 
         let list = List::new(list_items_formatted)
             .style(self.style)
-            .highlight_style(Style::default().fg(Color::Red));
+            .highlight_style(Style::default().fg(Color::Red))
+            .block(self.block);
 
         StatefulWidget::render(list, area, buf, &mut state.list_state);
     }

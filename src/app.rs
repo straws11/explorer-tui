@@ -4,7 +4,6 @@ use crate::{
     tui,
 };
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
-use ratatui::prelude::StatefulWidget;
 use ratatui::{
     backend::CrosstermBackend,
     buffer::Buffer,
@@ -14,7 +13,8 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget},
     Terminal,
 };
-use std::io;
+use ratatui::{prelude::StatefulWidget, style::Stylize, text::Line};
+use std::{fs, io};
 use tui::Tui;
 
 #[derive(Default, Debug)]
@@ -76,16 +76,26 @@ impl Widget for &mut App {
 
         // creating my custom widget and call its render method
         let filetree_widget = FileTreeWidget::new(self.tree.linear_list.clone())
-            .style(Style::default().fg(Color::Green));
+            .style(Style::default().fg(Color::Green))
+            .block(Block::bordered().title("File Tree"));
         filetree_widget.render(chunks[0], buf, &mut self.tree.state);
 
-        // placeholder stuff
-        let block = Block::bordered();
-        let title = Paragraph::new(Text::styled(
-            "I'm trying",
-            Style::default().fg(Color::Green),
-        ))
-        .block(block);
-        title.render(chunks[1], buf);
+        // mimic `cat` on rhs
+        let current_item = self.tree.get_selected_item();
+        let path = match current_item {
+            Some(item) => item.path,
+            None => return,
+        };
+
+        let contents: Text = match fs::read_to_string(path) {
+            Ok(text) => Text::from(text),
+            Err(_) => {
+                // assuming it's just a dir, we will skip it
+                Text::from(Line::from("Preview unavailable").style(Style::default().italic()))
+            }
+        };
+
+        let paragraph = Paragraph::new(contents).block(Block::bordered().title("File Preview"));
+        paragraph.render(chunks[1], buf);
     }
 }
