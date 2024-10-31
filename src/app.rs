@@ -1,19 +1,23 @@
 use crate::{
     file_tree_widget::FileTreeWidget,
+    preview_pane_widget::PreviewPane,
     tree::{FileTree, NavDirection},
     tui,
 };
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::{
+    event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
+    terminal::{Clear, ClearType},
+};
+use log::error;
+use ratatui::prelude::StatefulWidget;
 use ratatui::{
     backend::CrosstermBackend,
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::{Color, Style},
-    text::Text,
-    widgets::{Block, Paragraph, Widget},
+    widgets::{Block, Widget},
     Terminal,
 };
-use ratatui::{prelude::StatefulWidget, style::Stylize, text::Line};
 use std::{fs, io};
 use tui::Tui;
 
@@ -21,6 +25,7 @@ use tui::Tui;
 pub struct App {
     pub exit: bool,
     pub tree: FileTree,
+    pub preview_pane: PreviewPane,
 }
 
 impl App {
@@ -66,6 +71,27 @@ impl App {
     fn exit(&mut self) {
         self.exit = true;
     }
+
+    fn set_preview_contents(&mut self) {
+        if self.tree.state.index_changed() {
+            // generate new contents
+            let current_item = self.tree.get_selected_item();
+            self.preview_pane.preview_contents = match fs::read_to_string(current_item.path.clone())
+            {
+                Ok(text) => {
+                    error!("Text generated: {}", text);
+                    self.preview_pane.is_available = true;
+                    text
+                }
+                Err(_) => {
+                    // assuming it's just a dir, we will skip it
+                    error!("Text not generated!");
+                    self.preview_pane.is_available = false;
+                    "".to_string()
+                }
+            }
+        }
+    }
 }
 
 impl Widget for &mut App {
@@ -80,22 +106,8 @@ impl Widget for &mut App {
             .block(Block::bordered().title("File Tree"));
         filetree_widget.render(chunks[0], buf, &mut self.tree.state);
 
-        // mimic `cat` on rhs
-        let current_item = self.tree.get_selected_item();
-        let path = match current_item {
-            Some(item) => item.path,
-            None => return,
-        };
-
-        let contents: Text = match fs::read_to_string(path) {
-            Ok(text) => Text::from(text),
-            Err(_) => {
-                // assuming it's just a dir, we will skip it
-                Text::from(Line::from("Preview unavailable").style(Style::default().italic()))
-            }
-        };
-
-        let paragraph = Paragraph::new(contents).block(Block::bordered().title("File Preview"));
-        paragraph.render(chunks[1], buf);
+        self.set_preview_contents();
+        Clear(ClearType::All);
+        self.preview_pane.render(chunks[1], buf);
     }
 }

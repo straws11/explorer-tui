@@ -69,13 +69,10 @@ impl FileTree {
         tree
     }
 
-    pub fn get_selected_item(&mut self) -> Option<FileObj> {
-        let idx = self.state.list_state.selected();
-        // TODO: i don't think this method should be cloning the object, I only need to view it..
-        match idx {
-            Some(idx) => Some(self.linear_list[idx].clone()),
-            None => None,
-        }
+    /// Return reference to the FileObj at the currently selected index
+    pub fn get_selected_item(&mut self) -> &FileObj {
+        let idx = self.state.list_state.selected().expect("No file selected");
+        &self.linear_list[idx]
     }
 
     pub fn get_files(&mut self, path: &Path, max_depth: usize) -> io::Result<()> {

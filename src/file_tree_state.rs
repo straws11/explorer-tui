@@ -9,6 +9,8 @@ pub struct FileTreeState {
     pub list_state: ListState,
     /// Depth into sub dir
     pub parent_indices: Vec<usize>,
+    /// Prev file index
+    pub prev_idx: usize,
 }
 
 impl FileTreeState {
@@ -16,6 +18,7 @@ impl FileTreeState {
         let mut fts = Self {
             list_state: ListState::default(),
             parent_indices: Vec::new(),
+            prev_idx: 0,
         };
         fts.list_state.select_first();
         fts
@@ -78,6 +81,19 @@ impl FileTreeState {
 
         if let Some(idx) = parent_idx {
             self.list_state.select(Some(idx));
+        }
+    }
+
+    /// Returns whether the file tree selected item has changed since the last call to this
+    /// function
+    pub fn index_changed(&mut self) -> bool {
+        let idx = self.list_state.selected().expect("File not selected");
+
+        if idx != self.prev_idx {
+            self.prev_idx = idx;
+            return true;
+        } else {
+            return false;
         }
     }
 }

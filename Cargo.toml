@@ -5,4 +5,6 @@ edition = "2021"
 
 [dependencies]
 crossterm = "0.28.1"
+env_logger = "0.11.5"
+log = "0.4.22"
 ratatui = "0.28.1"
