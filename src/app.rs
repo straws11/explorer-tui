@@ -81,7 +81,7 @@ impl App {
                 Ok(text) => {
                     error!("Text generated: {}", text);
                     self.preview_pane.is_available = true;
-                    text
+                    str::replace(&text, "\t", "    ")
                 }
                 Err(_) => {
                     // assuming it's just a dir, we will skip it
@@ -107,7 +107,6 @@ impl Widget for &mut App {
         filetree_widget.render(chunks[0], buf, &mut self.tree.state);
 
         self.set_preview_contents();
-        Clear(ClearType::All);
         self.preview_pane.render(chunks[1], buf);
     }
 }
