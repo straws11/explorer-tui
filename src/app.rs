@@ -4,10 +4,7 @@ use crate::{
     tree::{FileTree, NavDirection},
     tui,
 };
-use crossterm::{
-    event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
-    terminal::{Clear, ClearType},
-};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use log::error;
 use ratatui::prelude::StatefulWidget;
 use ratatui::{
@@ -79,13 +76,13 @@ impl App {
             self.preview_pane.preview_contents = match fs::read_to_string(current_item.path.clone())
             {
                 Ok(text) => {
-                    error!("Text generated: {}", text);
+                    // error!("Text generated: {}", text);
                     self.preview_pane.is_available = true;
                     str::replace(&text, "\t", "    ")
                 }
                 Err(_) => {
                     // assuming it's just a dir, we will skip it
-                    error!("Text not generated!");
+                    // error!("Text not generated!");
                     self.preview_pane.is_available = false;
                     "".to_string()
                 }
@@ -103,7 +100,9 @@ impl Widget for &mut App {
         // creating my custom widget and call its render method
         let filetree_widget = FileTreeWidget::new(self.tree.linear_list.clone())
             .style(Style::default().fg(Color::Green))
-            .block(Block::bordered().title("File Tree"));
+            .block(
+                Block::bordered().title(format!("Tree: {}", self.tree.root_path.clone().display())),
+            );
         filetree_widget.render(chunks[0], buf, &mut self.tree.state);
 
         self.set_preview_contents();

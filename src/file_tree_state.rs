@@ -1,7 +1,7 @@
 use ratatui::widgets::ListState;
 use std::cmp::Ordering;
 
-use crate::tree::{FileObj, FileObjType};
+use crate::tree::{FileObj, FileObjType, TreeAction};
 
 #[derive(Default, Debug)]
 pub struct FileTreeState {
@@ -24,7 +24,7 @@ impl FileTreeState {
         fts
     }
 
-    pub fn move_down(&mut self, list: &Vec<FileObj>) {
+    pub fn move_down(&mut self, list: &[FileObj]) -> TreeAction {
         let idx = self.list_state.selected().unwrap();
 
         let mut count = idx + 1;
@@ -42,12 +42,13 @@ impl FileTreeState {
                 Ordering::Less => count += 1,
             }
         }
+        TreeAction::None
     }
 
-    pub fn move_up(&mut self, list: &Vec<FileObj>) {
+    pub fn move_up(&mut self, list: &[FileObj]) -> TreeAction {
         let idx = self.list_state.selected().unwrap();
         if idx == 0 {
-            return;
+            return TreeAction::None;
         }
         let mut count = idx;
         while count > 0 {
@@ -55,7 +56,7 @@ impl FileTreeState {
             match list[idx].depth.cmp(&list[count].depth) {
                 Ordering::Equal => {
                     self.list_state.select(Some(count));
-                    return;
+                    return TreeAction::None;
                 }
                 // top of this subdir
                 // NOTE: make this select the parent? (by popping)
@@ -63,25 +64,32 @@ impl FileTreeState {
                 Ordering::Less => {}
             }
         }
+        TreeAction::None
     }
 
-    pub fn move_sub_dir(&mut self, list: &Vec<FileObj>) {
+    pub fn move_sub_dir(&mut self, list: &[FileObj]) -> TreeAction {
         let idx = self.list_state.selected().unwrap();
         // file or empty dir => skip
-        if list[idx].object_type == FileObjType::File || list[idx].sub_items_size == 0 {
-            return;
+        if list[idx].object_type == FileObjType::File {
+            return TreeAction::None;
+        } else if list[idx].sub_items_size == 0 {
+            // dir and it's currently collapsed
+            return TreeAction::GenerateChild;
         }
         self.list_state.select_next();
         self.parent_indices.push(idx);
+        TreeAction::None
     }
 
-    pub fn move_parent_dir(&mut self, list: &Vec<FileObj>) {
-        let idx = self.list_state.selected().unwrap();
+    pub fn move_parent_dir(&mut self, _list: &[FileObj]) -> TreeAction {
+        // let idx = self.list_state.selected().unwrap();
         let parent_idx = self.parent_indices.pop();
 
-        if let Some(idx) = parent_idx {
-            self.list_state.select(Some(idx));
+        match parent_idx {
+            Some(idx) => self.list_state.select(Some(idx)),
+            None => return TreeAction::GenerateParent,
         }
+        TreeAction::None
     }
 
     /// Returns whether the file tree selected item has changed since the last call to this
@@ -91,9 +99,9 @@ impl FileTreeState {
 
         if idx != self.prev_idx {
             self.prev_idx = idx;
-            return true;
+            true
         } else {
-            return false;
+            false
         }
     }
 }

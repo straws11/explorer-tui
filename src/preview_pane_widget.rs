@@ -20,13 +20,13 @@ impl Widget for &PreviewPane {
         let text = if self.is_available {
             // TODO: expensive clone rip
             let a = Text::from(self.preview_contents.clone());
-            error!("Text item for contents: {}", a.to_string());
+            // error!("Text item for contents: {}", a.to_string());
             a
         } else {
             Text::from(Line::from("Preview Unavailable").style(Style::default().italic()))
         };
         let para = Paragraph::new(text).block(Block::bordered().title("File Preview"));
-        error!("Paragraph text: {:?}", para);
+        // error!("Paragraph text: {:?}", para);
         para.render(area, buf);
     }
 }
