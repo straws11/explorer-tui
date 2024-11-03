@@ -72,7 +72,7 @@ impl FileTree {
         let root_path = env::current_dir();
         match root_path {
             Ok(path) => {
-                let _ = tree.get_files(&path, 2);
+                let _ = tree.get_files(&path, 2, None);
             }
             Err(e) => println!("Current Dir error: {}", e),
         }
@@ -85,8 +85,14 @@ impl FileTree {
         &self.linear_list[idx]
     }
 
-    pub fn get_files(&mut self, path: &Path, max_depth: usize) -> io::Result<()> {
-        visit_dir(path, 0, max_depth, &mut self.linear_list)?;
+    pub fn get_files(
+        &mut self,
+        path: &Path,
+        max_depth: usize,
+        curr_file: Option<&Path>,
+    ) -> io::Result<()> {
+        let mut parent_indices: Vec<usize> = Vec::new();
+        visit_dir(path, 0, max_depth, &mut parent_indices, curr_file, self)?;
         self.root_path = path.to_path_buf();
         Ok(())
     }
@@ -149,15 +155,6 @@ impl FileTree {
         // fix / generate parent indices list
         let new_parents: Vec<usize> = match direction {
             NavDirection::IntoDir => {
-                // let paths: Vec<&PathBuf> = self
-                //     .state
-                //     .parent_indices
-                //     .iter()
-                //     .map(|item| &self.linear_list[*item].path)
-                //     .collect();
-                // search upwards only until finding most recent parent index
-                // since moving inwards, we can just adjust.. wait
-                // for item in paths.reverse() {}
                 let offset = self.state.parent_indices[0];
                 self.state
                     .parent_indices
@@ -172,7 +169,7 @@ impl FileTree {
 
         self.linear_list = Vec::new();
         self.state = FileTreeState::default();
-        let _ = self.get_files(new_root_path, 2);
+        let _ = self.get_files(new_root_path, 2, Some(&cur_selected_path));
         self.state.parent_indices = new_parents;
 
         // find old selected one
@@ -188,7 +185,9 @@ fn visit_dir(
     dir: &Path,
     depth: usize,
     max_depth: usize,
-    list: &mut Vec<FileObj>,
+    idx_tracker: &mut Vec<usize>,
+    path_to_search: Option<&Path>,
+    tree: &mut FileTree,
 ) -> io::Result<()> {
     // depth reached, base case
     if depth == max_depth || !dir.is_dir() {
@@ -198,6 +197,13 @@ fn visit_dir(
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
+
+        // assign parent indices vec if reached, should only happen once
+        if let Some(searched) = path_to_search {
+            if searched == path {
+                tree.state.parent_indices = idx_tracker.to_vec();
+            }
+        }
 
         let item_name = entry.file_name().into_string();
         let item_name = match item_name {
@@ -221,17 +227,27 @@ fn visit_dir(
         };
 
         let file_obj = FileObj::new(file_type.clone(), item_name, depth, entry.path());
-        list.push(file_obj);
-        let old_count = list.len();
+        tree.linear_list.push(file_obj);
+        let old_count = tree.linear_list.len();
 
         // recursively visit subdirs
         if file_type == FileObjType::Directory {
-            let _ = visit_dir(&path, depth + 1, max_depth, list);
+            // put the parent idx on the tracker stack
+            idx_tracker.push(old_count - 1);
+            let _ = visit_dir(
+                &path,
+                depth + 1,
+                max_depth,
+                idx_tracker,
+                path_to_search,
+                tree,
+            );
+            idx_tracker.pop();
         };
 
         // update the fileobj's subsize value now that it's been computed
         // note this be incorrect (0) if max depth is hit on the above call
-        list[old_count - 1].sub_items_size = list.len() - old_count;
+        tree.linear_list[old_count - 1].sub_items_size = tree.linear_list.len() - old_count;
     }
     Ok(())
 }
