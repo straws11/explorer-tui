@@ -74,7 +74,7 @@ impl FileTree {
         let root_path = env::current_dir();
         match root_path {
             Ok(path) => {
-                let _ = tree.get_files(&path, 2, None);
+                let _ = tree.get_files(&path, 3, None);
             }
             Err(e) => println!("Current Dir error: {}", e),
         }
@@ -175,7 +175,7 @@ impl FileTree {
 
         self.linear_list = Vec::new();
         self.state = FileTreeState::default();
-        let _ = self.get_files(new_root_path, 2, Some(cur_selected_parent));
+        let _ = self.get_files(new_root_path, 3, Some(cur_selected_parent));
 
         if let NavDirection::IntoDir = direction {
             self.state.parent_indices = new_parents;
@@ -183,8 +183,18 @@ impl FileTree {
 
         // find old selected one
         for (i, item) in self.linear_list.iter().enumerate() {
-            if item.path == cur_selected_parent {
-                self.state.list_state.select(Some(i));
+            match direction {
+                NavDirection::IntoDir => {
+                    if item.path == cur_selected_path {
+                        self.state.list_state.select(Some(i + 1));
+                    }
+                }
+                NavDirection::OutOfDir => {
+                    if item.path == cur_selected_parent {
+                        self.state.list_state.select(Some(i));
+                    }
+                }
+                _ => {}
             }
         }
     }
