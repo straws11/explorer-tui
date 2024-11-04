@@ -68,8 +68,8 @@ impl<'a> FileTreeWidget<'a> {
                 None => format!("{}  ", " ".repeat(item.depth * 3)),
             };
             let disp_str = match item.object_type {
-                FileObjType::File => format!("{}{}", disp_str, item.name.clone()),
-                FileObjType::Directory => format!("{}{}/", disp_str, item.name.clone()),
+                FileObjType::File => format!("{} {}", disp_str, item.name.clone()),
+                FileObjType::Directory => format!("{} {}/", disp_str, item.name.clone()),
             };
             item_list.push(ListItem::new(disp_str).style(Style::default().fg(Color::White)));
         }

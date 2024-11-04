@@ -100,9 +100,11 @@ impl Widget for &mut App {
         // creating my custom widget and call its render method
         let filetree_widget = FileTreeWidget::new(self.tree.linear_list.clone())
             .style(Style::default().fg(Color::Green))
-            .block(
-                Block::bordered().title(format!("Tree: {}", self.tree.root_path.clone().display())),
-            );
+            .block(Block::bordered().title(format!(
+                "Tree: {} pars: {:?}",
+                self.tree.root_path.clone().display(),
+                self.tree.state.parent_indices
+            )));
         filetree_widget.render(chunks[0], buf, &mut self.tree.state);
 
         self.set_preview_contents();
