@@ -74,7 +74,7 @@ impl FileTree {
         let root_path = env::current_dir();
         match root_path {
             Ok(path) => {
-                let _ = tree.get_files(&path, 3, None);
+                let _ = tree.get_files(&path, 3);
             }
             Err(e) => println!("Current Dir error: {}", e),
         }
@@ -87,16 +87,9 @@ impl FileTree {
         &self.linear_list[idx]
     }
 
-    pub fn get_files(
-        &mut self,
-        path: &Path,
-        max_depth: usize,
-        curr_file: Option<&Path>,
-    ) -> io::Result<()> {
-        let mut parent_indices: Vec<usize> = Vec::new();
-        visit_dir(path, 0, max_depth, &mut parent_indices, curr_file, self)?;
+    pub fn get_files(&mut self, path: &Path, max_depth: usize) -> io::Result<()> {
+        visit_dir(path, 0, max_depth, &mut self.linear_list)?;
         self.root_path = path.to_path_buf();
-        self.state.parent_indices = parent_indices;
         Ok(())
     }
 
@@ -131,7 +124,7 @@ impl FileTree {
 
     /// Regenerates the list used for the filetree
     fn regen_tree(&mut self, direction: NavDirection) {
-        let path_buf = self.root_path.clone().to_path_buf();
+        let old_root = self.root_path.clone();
         // path of selected file before regen
         let cur_selected_path = self.get_selected_item().path.clone();
         let cur_selected_parent = match cur_selected_path.parent() {
@@ -145,7 +138,7 @@ impl FileTree {
                 let next_root_idx = self.state.parent_indices[0];
                 &self.linear_list[next_root_idx].path.clone()
             }
-            NavDirection::OutOfDir => match path_buf.parent() {
+            NavDirection::OutOfDir => match old_root.parent() {
                 Some(valid_path) => {
                     if valid_path.to_str() != Some("") {
                         valid_path
@@ -159,39 +152,51 @@ impl FileTree {
             _ => return,
         };
 
-        // fix / generate parent indices list
-        let new_parents: Vec<usize> = match direction {
-            NavDirection::IntoDir => {
-                let offset = self.state.parent_indices[0];
-                self.state
-                    .parent_indices
-                    .iter()
-                    .skip(1)
-                    .map(|idx| idx - offset - 1)
-                    .collect::<Vec<usize>>()
-            }
-            _ => Vec::new(),
-        };
+        // expensive, sad
+        let mut old_parents_path: Vec<PathBuf> = self
+            .state
+            .parent_indices
+            .iter()
+            .skip(1)
+            .map(|idx| self.linear_list[*idx].path.clone())
+            .collect();
 
+        // this will be the newest parent, forcing it to be added
+        old_parents_path.push(cur_selected_path.clone());
         self.linear_list = Vec::new();
         self.state = FileTreeState::default();
-        let _ = self.get_files(new_root_path, 3, Some(cur_selected_parent));
+        let _ = self.get_files(new_root_path, 3);
 
+        let mut new_parents: Vec<usize> = Vec::new();
         if let NavDirection::IntoDir = direction {
-            self.state.parent_indices = new_parents;
+            for (i, item) in self.linear_list.iter().enumerate() {
+                if item.path == old_parents_path[0] {
+                    new_parents.push(i);
+                    old_parents_path.remove(0);
+                    // have found all parents
+                    if old_parents_path.is_empty() {
+                        break;
+                    }
+                }
+            }
         }
+        self.state.parent_indices = new_parents;
 
-        // find old selected one
+        // set pointer state appropriately
         for (i, item) in self.linear_list.iter().enumerate() {
             match direction {
                 NavDirection::IntoDir => {
                     if item.path == cur_selected_path {
-                        self.state.list_state.select(Some(i + 1));
+                        // don't go into empty dirs
+                        let idx = if item.sub_items_size > 0 { i + 1 } else { i };
+                        self.state.list_state.select(Some(idx));
+                        return;
                     }
                 }
                 NavDirection::OutOfDir => {
                     if item.path == cur_selected_parent {
                         self.state.list_state.select(Some(i));
+                        return;
                     }
                 }
                 _ => {}
@@ -204,9 +209,7 @@ fn visit_dir(
     dir: &Path,
     depth: usize,
     max_depth: usize,
-    idx_tracker: &mut Vec<usize>,
-    path_to_search: Option<&Path>,
-    tree: &mut FileTree,
+    list: &mut Vec<FileObj>,
 ) -> io::Result<()> {
     // depth reached, base case
     if depth == max_depth || !dir.is_dir() {
@@ -216,16 +219,6 @@ fn visit_dir(
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
-
-        // assign parent indices vec if reached, should only happen once
-        error!("{:?}, {:?}", path_to_search, path);
-
-        if let Some(searched) = path_to_search {
-            if searched == path {
-                error!("Found, assigning: {:?}", idx_tracker);
-                // tree.state.parent_indices = idx_tracker.to_vec();
-            }
-        }
 
         let item_name = entry.file_name().into_string();
         let item_name = match item_name {
@@ -249,29 +242,17 @@ fn visit_dir(
         };
 
         let file_obj = FileObj::new(file_type.clone(), item_name, depth, entry.path());
-        tree.linear_list.push(file_obj);
-        let old_count = tree.linear_list.len();
+        list.push(file_obj);
+        let old_count = list.len();
 
         // recursively visit subdirs
         if file_type == FileObjType::Directory {
-            // put the parent idx on the tracker stack
-            // idx_tracker.push(old_count - 1);
-            // error!("calling with stack: {:?}", idx_tracker);
-            let _ = visit_dir(
-                &path,
-                depth + 1,
-                max_depth,
-                idx_tracker,
-                path_to_search,
-                tree,
-            );
-            // idx_tracker.pop();
-            // error!("stack after pop: {:?}", idx_tracker);
+            let _ = visit_dir(&path, depth + 1, max_depth, list);
         };
 
         // update the fileobj's subsize value now that it's been computed
         // note this be incorrect (0) if max depth is hit on the above call
-        tree.linear_list[old_count - 1].sub_items_size = tree.linear_list.len() - old_count;
+        list[old_count - 1].sub_items_size = list.len() - old_count;
     }
     Ok(())
 }
