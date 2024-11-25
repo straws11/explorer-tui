@@ -29,7 +29,14 @@ pub enum NavDirection {
 pub enum FileObjType {
     #[default]
     File,
-    Directory,
+    Directory(DirectoryStatus),
+}
+
+#[derive(Default, Debug, Eq, Clone, PartialEq)]
+pub enum DirectoryStatus {
+    #[default]
+    Collapsed,
+    Open,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -79,6 +86,57 @@ impl FileTree {
             Err(e) => println!("Current Dir error: {}", e),
         }
         tree
+    }
+
+    /// Collapse or open directory contents if type is directory
+    pub fn try_toggle_collapse(&mut self) -> io::Result<()> {
+        let idx = self.state.list_state.selected().expect("No file selected");
+        let list: &mut Vec<FileObj> = &mut self.linear_list;
+        match list[idx].object_type {
+            FileObjType::Directory(DirectoryStatus::Collapsed) => {
+                list[idx].object_type = FileObjType::Directory(DirectoryStatus::Open);
+                let mut count = 0;
+                for (i, entry) in fs::read_dir(list[idx].path.clone())?.enumerate() {
+                    let entry = entry?;
+                    let path = entry.path();
+                    let file_type = if path.is_dir() {
+                        FileObjType::Directory(DirectoryStatus::Collapsed)
+                    } else {
+                        FileObjType::File
+                    };
+                    let item_name = entry.file_name().into_string();
+                    let item_name = match item_name {
+                        Ok(name) => name,
+                        Err(e) => {
+                            println!("Error converting filename: {:?}", e);
+                            continue; // skip invalid filename entries
+                        }
+                    };
+                    let new_obj = FileObj {
+                        sub_items_size: 0,
+                        object_type: file_type,
+                        name: item_name,
+                        depth: list[idx].depth + 1,
+                        path,
+                    };
+                    list.insert(idx + i + 1, new_obj);
+                    count += 1;
+                }
+                self.linear_list[idx].sub_items_size = count;
+            }
+
+            FileObjType::Directory(DirectoryStatus::Open) => {
+                self.linear_list[idx].object_type =
+                    FileObjType::Directory(DirectoryStatus::Collapsed);
+                let first = &self.linear_list[..idx + 1];
+                let size = &self.linear_list[idx].sub_items_size;
+                let last = &self.linear_list[idx + size + 1..];
+                self.linear_list = [first, last].concat();
+                self.linear_list[idx].sub_items_size = 0;
+            }
+            FileObjType::File => {}
+        }
+        Ok(())
     }
 
     /// Return reference to the FileObj at the currently selected index
@@ -236,7 +294,7 @@ fn visit_dir(
         // }
 
         let file_type = if path.is_dir() {
-            FileObjType::Directory
+            FileObjType::Directory(DirectoryStatus::Collapsed)
         } else {
             FileObjType::File
         };
@@ -246,9 +304,12 @@ fn visit_dir(
         let old_count = list.len();
 
         // recursively visit subdirs
-        if file_type == FileObjType::Directory {
-            let _ = visit_dir(&path, depth + 1, max_depth, list);
-        };
+        match file_type {
+            FileObjType::Directory(DirectoryStatus::Open) => {
+                let _ = visit_dir(&path, depth + 1, max_depth, list);
+            }
+            _ => (),
+        }
 
         // update the fileobj's subsize value now that it's been computed
         // note this be incorrect (0) if max depth is hit on the above call

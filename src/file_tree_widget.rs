@@ -69,7 +69,10 @@ impl<'a> FileTreeWidget<'a> {
             };
             let disp_str = match item.object_type {
                 FileObjType::File => format!("{} {}", disp_str, item.name.clone()),
-                FileObjType::Directory => format!("{} {}/", disp_str, item.name.clone()),
+                FileObjType::Directory(_) => {
+                    // TODO: change icon depending on Collapsed/Open
+                    format!("{} {}/", disp_str, item.name.clone())
+                }
             };
             item_list.push(ListItem::new(disp_str).style(Style::default().fg(Color::White)));
         }

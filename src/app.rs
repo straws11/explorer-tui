@@ -59,6 +59,10 @@ impl App {
             KeyCode::Char('k') => self.tree.ft_move(NavDirection::Up),
             KeyCode::Char('h') => self.tree.ft_move(NavDirection::OutOfDir),
             KeyCode::Char('l') => self.tree.ft_move(NavDirection::IntoDir),
+            KeyCode::Char(' ') => self
+                .tree
+                .try_toggle_collapse()
+                .expect("File Error TODO move lol"),
             _ => {}
         }
     }
