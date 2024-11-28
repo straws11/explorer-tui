@@ -13,7 +13,7 @@ pub enum TreeAction {
     #[default]
     None,
     GenerateParent,
-    GenerateChild,
+    GenerateChild(usize),
 }
 /// File tree navigational directions
 #[derive(Default, Debug)]
@@ -82,6 +82,7 @@ impl FileTree {
             Ok(path) => {
                 let items = tree.generate_level(path.as_path(), 0);
                 tree.linear_list = items;
+                tree.root_path = path;
             }
             Err(e) => println!("Current Dir error: {}", e),
         }
@@ -128,13 +129,8 @@ impl FileTree {
                 error!("{:#?}", subdir_path);
                 let subdir_items = self.generate_level(subdir_path, depth + 1);
                 list[idx].sub_items_size = subdir_items.len();
-                error!("{:#?}", subdir_items);
-
-                let a = list
-                    .splice(idx + 1..idx + 1, subdir_items)
-                    .collect::<Vec<FileObj>>();
-                error!("{:#?}", a);
                 self.linear_list = list;
+                self.insert_list(subdir_items, idx + 1);
             }
 
             FileObjType::Directory(DirectoryStatus::Open) => {
@@ -187,10 +183,69 @@ impl FileTree {
         }
     }
 
+    // Insert a list of file objects at a specified index in the main list
+    fn insert_list(&mut self, list: Vec<FileObj>, index: usize) {
+        let mut old = self.linear_list.clone();
+        old.splice(index..index, list).collect::<Vec<FileObj>>();
+        self.linear_list = old;
+    }
+
     fn handle_action(&mut self, action: TreeAction) {
         match action {
-            TreeAction::GenerateParent => self.regen_tree(NavDirection::OutOfDir),
-            TreeAction::GenerateChild => self.regen_tree(NavDirection::IntoDir),
+            TreeAction::GenerateParent => {
+                let path = self.root_path.clone();
+                let new_path = match path.parent() {
+                    Some(path) => path,
+                    None => return,
+                };
+                let parent_items: Vec<FileObj> = self.generate_level(new_path, 0);
+                // increase depth of every existing item
+                error!("This is the new root layer: {:#?}", parent_items);
+                for item in &mut self.linear_list {
+                    item.depth += 1;
+                }
+                // find the place this list should live
+                let old = self.linear_list.clone(); // save old root
+                self.linear_list = parent_items; // put new root
+                error!("Old root to insert: {:#?}", old);
+                error!("New root: {:#?}", self.linear_list);
+                for (i, item) in self.linear_list.iter().enumerate() {
+                    // this is where the existing list is
+                    if item.path == path {
+                        // self.linear_list.remove(i);
+                        self.insert_list(old, i + 1); // insert old root
+                                                      // update parent indices
+                        let _ = self
+                            .state
+                            .parent_indices
+                            .iter()
+                            .map(|val| val + i)
+                            .collect::<Vec<usize>>();
+                        self.state.parent_indices.insert(0, i);
+                        let old_selected_idx = self.state.list_state.selected().expect("Problem!");
+                        self.state.list_state.select(Some(old_selected_idx + i));
+                        self.root_path = new_path.to_path_buf();
+                        break;
+                    }
+                }
+            }
+            TreeAction::GenerateChild(idx) => {
+                match self.linear_list[idx].object_type {
+                    FileObjType::Directory(DirectoryStatus::Collapsed) => {
+                        self.linear_list[idx].object_type =
+                            FileObjType::Directory(DirectoryStatus::Open);
+                    }
+                    _ => {}
+                }
+                let path = self.linear_list[idx].path.clone();
+                let depth = self.linear_list[idx].depth + 1;
+                let list: Vec<FileObj> = self.generate_level(path.as_path(), depth);
+                self.linear_list[idx].sub_items_size = list.len();
+                self.insert_list(list, idx + 1);
+                // kinda hacky but ok, perform the move after regeneration, because move_sub_dir
+                // returned with the GenerateChild action the first time
+                self.state.move_sub_dir(&self.linear_list);
+            }
             TreeAction::None => {}
         }
     }

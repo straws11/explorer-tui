@@ -74,7 +74,7 @@ impl FileTreeState {
             return TreeAction::None;
         } else if list[idx].sub_items_size == 0 {
             // dir and it's currently collapsed
-            return TreeAction::GenerateChild;
+            return TreeAction::GenerateChild(idx);
         }
         self.list_state.select_next();
         self.parent_indices.push(idx);
