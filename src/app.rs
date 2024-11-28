@@ -1,7 +1,7 @@
 use crate::{
     file_tree_widget::FileTreeWidget,
     preview_pane_widget::PreviewPane,
-    tree::{FileTree, NavDirection},
+    tree::{FileObj, FileTree, NavDirection},
     tui,
 };
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
@@ -23,6 +23,15 @@ pub struct App {
     pub exit: bool,
     pub tree: FileTree,
     pub preview_pane: PreviewPane,
+    pub app_action: AppAction,
+}
+
+#[derive(Debug, Default)]
+pub enum AppAction {
+    Copying(FileObj),
+    Moving(FileObj),
+    #[default]
+    None,
 }
 
 impl App {
@@ -63,11 +72,26 @@ impl App {
                 .tree
                 .try_toggle_collapse()
                 .expect("File Error TODO move lol"),
+            KeyCode::Char('y') => {
+                self.app_action = AppAction::Copying(self.tree.get_selected_item().clone())
+            }
+            KeyCode::Char('p') => self.paste_file(),
+            KeyCode::Char('x') => {
+                self.app_action = AppAction::Moving(self.tree.get_selected_item().clone())
+            }
             _ => {}
         }
     }
     // todo some test stuff from the example page, might be cool to look at
     // https://ratatui.rs/tutorials/counter-app/basic-app/
+
+    fn paste_file(&mut self) {
+        match &self.app_action {
+            AppAction::Copying(file) => {}
+            AppAction::Moving(file) => {}
+            AppAction::None => {}
+        }
+    }
 
     fn exit(&mut self) {
         self.exit = true;

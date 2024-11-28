@@ -77,11 +77,11 @@ impl FileTree {
         };
 
         // keep the list of objects for the component use
-        // let root_path = Path::new("../../explorer_rust");
         let root_path = env::current_dir();
         match root_path {
             Ok(path) => {
-                let _ = tree.get_files(&path, 3);
+                let items = tree.generate_level(path.as_path(), 0);
+                tree.linear_list = items;
             }
             Err(e) => println!("Current Dir error: {}", e),
         }
@@ -91,11 +91,11 @@ impl FileTree {
     /// Collapse or open directory contents if type is directory
     pub fn try_toggle_collapse(&mut self) -> io::Result<()> {
         let idx = self.state.list_state.selected().expect("No file selected");
-        let list: &mut Vec<FileObj> = &mut self.linear_list;
+        let mut list: Vec<FileObj> = self.linear_list.clone();
         match list[idx].object_type {
             FileObjType::Directory(DirectoryStatus::Collapsed) => {
                 list[idx].object_type = FileObjType::Directory(DirectoryStatus::Open);
-                let mut count = 0;
+                /* let mut count = 0;
                 for (i, entry) in fs::read_dir(list[idx].path.clone())?.enumerate() {
                     let entry = entry?;
                     let path = entry.path();
@@ -122,15 +122,30 @@ impl FileTree {
                     list.insert(idx + i + 1, new_obj);
                     count += 1;
                 }
-                self.linear_list[idx].sub_items_size = count;
+                self.linear_list[idx].sub_items_size = count; */
+                let subdir_path = list[idx].path.as_path();
+                let depth = list[idx].depth;
+                error!("{:#?}", subdir_path);
+                let subdir_items = self.generate_level(subdir_path, depth + 1);
+                list[idx].sub_items_size = subdir_items.len();
+                error!("{:#?}", subdir_items);
+
+                let a = list
+                    .splice(idx + 1..idx + 1, subdir_items)
+                    .collect::<Vec<FileObj>>();
+                error!("{:#?}", a);
+                self.linear_list = list;
             }
 
             FileObjType::Directory(DirectoryStatus::Open) => {
                 self.linear_list[idx].object_type =
                     FileObjType::Directory(DirectoryStatus::Collapsed);
                 let first = &self.linear_list[..idx + 1];
-                let size = &self.linear_list[idx].sub_items_size;
-                let last = &self.linear_list[idx + size + 1..];
+                let mut stop = idx + 1;
+                while self.linear_list[stop].depth > self.linear_list[idx].depth {
+                    stop += 1;
+                }
+                let last = &self.linear_list[stop..];
                 self.linear_list = [first, last].concat();
                 self.linear_list[idx].sub_items_size = 0;
             }
@@ -145,11 +160,11 @@ impl FileTree {
         &self.linear_list[idx]
     }
 
-    pub fn get_files(&mut self, path: &Path, max_depth: usize) -> io::Result<()> {
+    /* pub fn get_files(&mut self, path: &Path, max_depth: usize) -> io::Result<()> {
         visit_dir(path, 0, max_depth, &mut self.linear_list)?;
         self.root_path = path.to_path_buf();
         Ok(())
-    }
+    } */
 
     pub fn ft_move(&mut self, direction: NavDirection) {
         match direction {
@@ -178,6 +193,50 @@ impl FileTree {
             TreeAction::GenerateChild => self.regen_tree(NavDirection::IntoDir),
             TreeAction::None => {}
         }
+    }
+
+    fn generate_level(&mut self, root: &Path, new_depth: usize) -> Vec<FileObj> {
+        let mut list = Vec::<FileObj>::new();
+        let iterator = match fs::read_dir(root) {
+            Ok(val) => val,
+            Err(e) => {
+                println!("Reading Error: {e}");
+                return Vec::<FileObj>::new();
+            }
+        };
+        for (i, entry) in iterator.enumerate() {
+            let entry = match entry {
+                Ok(en) => en,
+                Err(e) => {
+                    println!("Entry Error: {e}");
+                    continue;
+                }
+            };
+            let path = entry.path();
+            let file_type = if path.is_dir() {
+                FileObjType::Directory(DirectoryStatus::Collapsed)
+            } else {
+                FileObjType::File
+            };
+            let item_name = entry.file_name().into_string();
+            let item_name = match item_name {
+                Ok(name) => name,
+                Err(e) => {
+                    println!("Error converting filename: {:?}", e);
+                    continue; // skip invalid filename entries
+                }
+            };
+            let new_obj = FileObj {
+                sub_items_size: 0,
+                object_type: file_type,
+                name: item_name,
+                depth: new_depth,
+                path,
+            };
+            list.insert(i, new_obj);
+        }
+        error!("{:?}", list);
+        list.to_vec()
     }
 
     /// Regenerates the list used for the filetree
@@ -223,7 +282,7 @@ impl FileTree {
         old_parents_path.push(cur_selected_path.clone());
         self.linear_list = Vec::new();
         self.state = FileTreeState::default();
-        let _ = self.get_files(new_root_path, 3);
+        // let _ = self.get_files(new_root_path, 3);
 
         let mut new_parents: Vec<usize> = Vec::new();
         if let NavDirection::IntoDir = direction {
@@ -263,7 +322,7 @@ impl FileTree {
     }
 }
 
-fn visit_dir(
+/* fn visit_dir(
     dir: &Path,
     depth: usize,
     max_depth: usize,
@@ -316,4 +375,4 @@ fn visit_dir(
         list[old_count - 1].sub_items_size = list.len() - old_count;
     }
     Ok(())
-}
+} */
