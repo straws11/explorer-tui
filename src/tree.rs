@@ -4,6 +4,7 @@ use crate::file_tree_state::FileTreeState;
 use std::env;
 use std::fs;
 use std::io;
+use std::ops::Index;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -14,6 +15,7 @@ pub enum TreeAction {
     None,
     GenerateParent,
     GenerateChild(usize),
+    ShiftIntoChild,
 }
 /// File tree navigational directions
 #[derive(Default, Debug)]
@@ -23,6 +25,7 @@ pub enum NavDirection {
     Down,
     IntoDir,
     OutOfDir,
+    ZoomIn,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
@@ -138,11 +141,18 @@ impl FileTree {
                     FileObjType::Directory(DirectoryStatus::Collapsed);
                 let first = &self.linear_list[..idx + 1];
                 let mut stop = idx + 1;
-                while self.linear_list[stop].depth > self.linear_list[idx].depth {
+                while stop < self.linear_list.len()
+                    && self.linear_list[stop].depth > self.linear_list[idx].depth
+                {
                     stop += 1;
                 }
-                let last = &self.linear_list[stop..];
-                self.linear_list = [first, last].concat();
+                // if it doesn't have a "last"
+                if stop == self.linear_list.len() {
+                    self.linear_list = first.to_vec();
+                } else {
+                    let last = &self.linear_list[stop..];
+                    self.linear_list = [first, last].concat();
+                }
                 self.linear_list[idx].sub_items_size = 0;
             }
             FileObjType::File => {}
@@ -180,6 +190,9 @@ impl FileTree {
                 let action = self.state.move_parent_dir(&self.linear_list);
                 self.handle_action(action);
             }
+            NavDirection::ZoomIn => {
+                self.handle_action(TreeAction::ShiftIntoChild);
+            }
         }
     }
 
@@ -212,6 +225,9 @@ impl FileTree {
                 for (i, item) in self.linear_list.iter().enumerate() {
                     // this is where the existing list is
                     if item.path == path {
+                        // update collapse status
+                        self.linear_list.get_mut(i).unwrap().object_type =
+                            FileObjType::Directory(DirectoryStatus::Open);
                         // self.linear_list.remove(i);
                         self.insert_list(old, i + 1); // insert old root
                                                       // update parent indices
@@ -230,12 +246,11 @@ impl FileTree {
                 }
             }
             TreeAction::GenerateChild(idx) => {
-                match self.linear_list[idx].object_type {
-                    FileObjType::Directory(DirectoryStatus::Collapsed) => {
-                        self.linear_list[idx].object_type =
-                            FileObjType::Directory(DirectoryStatus::Open);
-                    }
-                    _ => {}
+                if let FileObjType::Directory(DirectoryStatus::Collapsed) =
+                    self.linear_list[idx].object_type
+                {
+                    self.linear_list[idx].object_type =
+                        FileObjType::Directory(DirectoryStatus::Open);
                 }
                 let path = self.linear_list[idx].path.clone();
                 let depth = self.linear_list[idx].depth + 1;
@@ -245,6 +260,61 @@ impl FileTree {
                 // kinda hacky but ok, perform the move after regeneration, because move_sub_dir
                 // returned with the GenerateChild action the first time
                 self.state.move_sub_dir(&self.linear_list);
+            }
+            TreeAction::ShiftIntoChild => {
+                // remove all left-most level items
+                // self.linear_list.retain(|item| item.depth != 0);
+
+                let mut head = if let Some(idx) = self.state.parent_indices.first() {
+                    *idx
+                } else {
+                    return;
+                };
+                let mut i = 0usize;
+                let mut j = self.linear_list.len();
+                let mut searching = true;
+                error!("Head: {head}");
+                while i < j {
+                    if i == head && searching {
+                        searching = false;
+                        self.linear_list.remove(i);
+                        j -= 1;
+                        while self.linear_list.get(i).unwrap().depth != 0 && i < j {
+                            i += 1;
+                        }
+                        continue;
+                    }
+                    error!("made it {i} {j} {head}");
+                    if let FileObjType::Directory(DirectoryStatus::Open) =
+                        self.linear_list.get(i).unwrap().object_type
+                    {
+                        let to = self.linear_list.get(i).unwrap().sub_items_size;
+                        self.linear_list.drain(i..i + to + 1);
+                        j -= to + 1;
+                        if searching {
+                            head -= to + 1;
+                        }
+                    };
+                    if self.linear_list.get(i).unwrap().depth == 0 {
+                        self.linear_list.remove(i);
+                        j -= 1;
+                        if searching {
+                            head -= 1;
+                        }
+                    }
+                }
+                // adjust depth
+                self.linear_list.iter_mut().for_each(|item| item.depth -= 1);
+
+                // adjust parent indices values because of the list changes
+                let shift = self.state.parent_indices.remove(0);
+                self.state
+                    .parent_indices
+                    .iter_mut()
+                    .for_each(|idx| *idx -= shift + 1);
+                // selected index shift
+                let old_idx = self.state.list_state.selected().unwrap();
+                self.state.list_state.select(Some(old_idx - shift));
             }
             TreeAction::None => {}
         }
