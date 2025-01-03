@@ -7,7 +7,7 @@ use ratatui::{
 
 use crate::{
     file_tree_state::FileTreeState,
-    tree::{FileObj, FileObjType},
+    tree::{DirectoryStatus, FileObj, FileObjType},
 };
 
 #[derive(Debug, Clone)]
@@ -69,9 +69,11 @@ impl<'a> FileTreeWidget<'a> {
             };
             let disp_str = match item.object_type {
                 FileObjType::File => format!("{} {}", disp_str, item.name.clone()),
-                FileObjType::Directory(_) => {
-                    // TODO: change icon depending on Collapsed/Open
+                FileObjType::Directory(DirectoryStatus::Collapsed) => {
                     format!("{} {}/", disp_str, item.name.clone())
+                }
+                FileObjType::Directory(DirectoryStatus::Open) => {
+                    format!("{} {}/", disp_str, item.name.clone())
                 }
             };
             item_list.push(ListItem::new(disp_str).style(Style::default().fg(Color::White)));

@@ -1,7 +1,7 @@
 use ratatui::widgets::ListState;
 use std::cmp::Ordering;
 
-use crate::tree::{FileObj, FileObjType, TreeAction};
+use crate::tree::{DirectoryStatus, FileObj, FileObjType, TreeAction};
 
 #[derive(Default, Debug)]
 pub struct FileTreeState {
@@ -69,16 +69,17 @@ impl FileTreeState {
 
     pub fn move_sub_dir(&mut self, list: &[FileObj]) -> TreeAction {
         let idx = self.list_state.selected().unwrap();
-        // file or empty dir => skip
-        if list[idx].object_type == FileObjType::File {
-            return TreeAction::None;
-        } else if list[idx].sub_items_size == 0 {
-            // dir and it's currently collapsed
-            return TreeAction::GenerateChild(idx);
+
+        match list[idx].object_type {
+            FileObjType::File => TreeAction::None,
+
+            FileObjType::Directory(DirectoryStatus::Collapsed) => TreeAction::GenerateChild(idx),
+            FileObjType::Directory(DirectoryStatus::Open) => {
+                self.list_state.select_next();
+                self.parent_indices.push(idx);
+                TreeAction::None
+            }
         }
-        self.list_state.select_next();
-        self.parent_indices.push(idx);
-        TreeAction::None
     }
 
     pub fn move_parent_dir(&mut self, _list: &[FileObj]) -> TreeAction {
