@@ -195,6 +195,7 @@ impl FileTree {
                         // update collapse status
                         self.linear_list.get_mut(i).unwrap().object_type =
                             FileObjType::Directory(DirectoryStatus::Open);
+                        self.linear_list.get_mut(i).unwrap().sub_items_size = old.len();
                         // self.linear_list.remove(i);
                         self.insert_list(old, i + 1); // insert old root
                                                       // update parent indices
@@ -246,6 +247,7 @@ impl FileTree {
                 let mut searching = true;
                 // error!("Head: {head}");
                 while i < j {
+                    // handle skipping over the subdir contents being kept
                     if i == head && searching {
                         searching = false;
                         self.linear_list.remove(i);
@@ -253,15 +255,19 @@ impl FileTree {
                         while self.linear_list.get(i).unwrap().depth != 0 && i < j {
                             i += 1;
                         }
+                        error!("impossible");
                         continue;
                     }
-                    // error!("made it {i} {j} {head}");
+
+                    // delete contents of open directories when needed
                     if let FileObjType::Directory(DirectoryStatus::Open) =
                         self.linear_list.get(i).unwrap().object_type
                     {
                         let to = self.linear_list.get(i).unwrap().sub_items_size;
+                        error!("To: {}", to);
                         self.linear_list.drain(i..i + to + 1);
                         j -= to + 1;
+                        error!("Here");
                         if searching {
                             head -= to + 1;
                         }
@@ -272,6 +278,7 @@ impl FileTree {
                         if searching {
                             head -= 1;
                         }
+                        error!("dont");
                     }
                 }
                 // adjust depth
@@ -285,7 +292,7 @@ impl FileTree {
                     .for_each(|idx| *idx -= shift + 1);
                 // selected index shift
                 let old_idx = self.state.list_state.selected().unwrap();
-                self.state.list_state.select(Some(old_idx - shift));
+                self.state.list_state.select(Some(old_idx - shift - 1));
             }
             TreeAction::None => {}
         }
