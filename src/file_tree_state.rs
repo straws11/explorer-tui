@@ -75,8 +75,10 @@ impl FileTreeState {
 
             FileObjType::Directory(DirectoryStatus::Collapsed) => TreeAction::GenerateChild(idx),
             FileObjType::Directory(DirectoryStatus::Open) => {
-                self.list_state.select_next();
-                self.parent_indices.push(idx);
+                if list[idx].sub_items_size > 0 {
+                    self.list_state.select_next();
+                    self.parent_indices.push(idx);
+                }
                 TreeAction::None
             }
         }

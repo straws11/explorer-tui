@@ -1,12 +1,12 @@
 use crate::{
     file_tree_widget::FileTreeWidget,
     preview_pane_widget::PreviewPane,
-    tree::{FileObj, FileTree, NavDirection},
+    status_bar_widget::StatusBar,
+    tree::{FileObj, FileObjType, FileTree, NavDirection},
     tui,
 };
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use log::error;
-use ratatui::prelude::StatefulWidget;
 use ratatui::{
     backend::CrosstermBackend,
     buffer::Buffer,
@@ -15,6 +15,7 @@ use ratatui::{
     widgets::{Block, Widget},
     Terminal,
 };
+use ratatui::{prelude::StatefulWidget, text::Text};
 use std::{fs, io};
 use tui::Tui;
 
@@ -24,6 +25,7 @@ pub struct App {
     pub tree: FileTree,
     pub preview_pane: PreviewPane,
     pub app_action: AppAction,
+    pub notify: String,
 }
 
 #[derive(Debug, Default)]
@@ -76,7 +78,8 @@ impl App {
             KeyCode::Char('y') => {
                 self.app_action = AppAction::Copying(self.tree.get_selected_item().clone())
             }
-            KeyCode::Char('p') => self.paste_file(),
+            KeyCode::Char('P') => self.paste_file(true),
+            KeyCode::Char('p') => self.paste_file(false),
             KeyCode::Char('x') => {
                 self.app_action = AppAction::Moving(self.tree.get_selected_item().clone())
             }
@@ -86,12 +89,55 @@ impl App {
     // todo some test stuff from the example page, might be cool to look at
     // https://ratatui.rs/tutorials/counter-app/basic-app/
 
-    fn paste_file(&mut self) {
+    fn paste_file(&mut self, inside: bool) {
+        if let AppAction::None = self.app_action {
+            return;
+        }
+
+        // setup destination
+        let file = match &self.app_action {
+            AppAction::Copying(file) | AppAction::Moving(file) => file,
+            AppAction::None => {
+                // impossible to reach anyway
+                return;
+            }
+        };
+
+        let item = self.tree.get_selected_item();
+        let mut dest = if inside && matches!(item.object_type, FileObjType::Directory(_)) {
+            // try to paste inside the directory currently selected
+            item.path.to_path_buf()
+        } else {
+            // else: either not a dir, or we don't want to paste inside, paste here
+            item.path.parent().unwrap().to_path_buf()
+        };
+        dest.push(&file.name);
+
+        // final action
         match &self.app_action {
-            AppAction::Copying(file) => {}
-            AppAction::Moving(file) => {}
+            AppAction::Copying(file) => {
+                let copy_result = fs::copy(file.path.clone(), &dest);
+                match copy_result {
+                    Ok(_) => {}
+                    Err(e) => {
+                        error!("{}", e)
+                    }
+                }
+                self.notify = format!("Pasted {:?} to {:?}", file.path, dest);
+            }
+            AppAction::Moving(file) => {
+                let move_result = fs::rename(file.path.clone(), &dest);
+                match move_result {
+                    Ok(_) => {}
+                    Err(e) => {
+                        error!("{}", e)
+                    }
+                }
+                self.notify = format!("Moved {:?} to {:?}", file.path, dest);
+            }
             AppAction::None => {}
         }
+        self.app_action = AppAction::None;
     }
 
     fn exit(&mut self) {
@@ -123,9 +169,23 @@ impl App {
 impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
         // splitting the app layout into different segments
-        let chunks = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(area);
+        let main_chunks =
+            // Layout::vertical([Constraint::Min(2), Constraint::Percentage(100)]).split(area);
+            Layout::vertical([Constraint::Length(3), Constraint::Fill(1), Constraint::Length(1)]).split(area);
 
+        let status = StatusBar::new();
+        status.render(main_chunks[0], buf);
+        self.notify = match &self.app_action {
+            AppAction::Copying(file) => format!("Copying {:?}", file.path),
+            AppAction::Moving(file) => format!("Moving {:?}", file.path),
+            AppAction::None => "".to_string(),
+        };
+        let notify_text = Text::from(self.notify.clone());
+        notify_text.render(main_chunks[2], buf);
+
+        let content_chunks =
+            Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .split(main_chunks[1]);
         // creating my custom widget and call its render method
         let filetree_widget = FileTreeWidget::new(self.tree.linear_list.clone())
             .style(Style::default().fg(Color::Green))
@@ -134,9 +194,9 @@ impl Widget for &mut App {
                 self.tree.root_path.clone().display(),
                 self.tree.state.parent_indices
             )));
-        filetree_widget.render(chunks[0], buf, &mut self.tree.state);
+        filetree_widget.render(content_chunks[0], buf, &mut self.tree.state);
 
         self.set_preview_contents();
-        self.preview_pane.render(chunks[1], buf);
+        self.preview_pane.render(content_chunks[1], buf);
     }
 }

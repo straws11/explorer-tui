@@ -94,7 +94,7 @@ impl StatefulWidget for FileTreeWidget<'_> {
 
         let list = List::new(list_items_formatted)
             .style(self.style)
-            .highlight_style(Style::default().fg(Color::Red))
+            .highlight_style(self.highlight_style)
             .block(self.block)
             .scroll_padding(3);
 
